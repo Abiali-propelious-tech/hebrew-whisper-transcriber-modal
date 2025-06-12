@@ -137,6 +137,7 @@ const AudioTranscriber: React.FC = () => {
       } else {
         setError(`Transcription failed: ${result.error || "Unknown error"}`);
       }
+      //eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       console.error("Error during transcription:", err);
       setError(`Failed to transcribe audio: ${err.message}`);
