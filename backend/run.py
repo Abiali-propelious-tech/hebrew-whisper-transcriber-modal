@@ -66,63 +66,15 @@ def get_modal_image():
     )
 
 
-# def get_modal_image():
-#     return (
-#         modal.Image.from_registry(
-#             "nvidia/cuda:11.8.0-runtime-ubuntu22.04",  # CUDA base without cuDNN
-#             add_python="3.11",
-#         )
-#         .apt_install(
-#             "ffmpeg",
-#             "curl",
-#             "wget",
-#             "tar",
-#             "build-essential",
-#             "python3-dev",
-#             "ca-certificates",
-#         )
-#         .run_commands(
-#             [
-#                 # Confirmed correct URL for cuDNN 9.1.0.70 archive for CUDA 11.8 (Linux x86_64)
-#                 # This URL was found by directly navigating NVIDIA's public cuDNN redistribution directory.
-#                 "wget https://developer.download.nvidia.com/compute/cudnn/redist/cudnn/linux-x86_64/cudnn-linux-x86_64-9.1.0.70_cuda11-archive.tar.xz",
-#                 "tar -xJf cudnn-linux-x86_64-9.1.0.70_cuda11-archive.tar.xz",
-#                 # Copy cuDNN files to the standard CUDA paths
-#                 "cp cudnn-linux-x86_64-9.1.0.70_cuda11-archive/include/cudnn*.h /usr/include/",
-#                 "cp cudnn-linux-x86_64-9.1.0.70_cuda11-archive/lib/libcudnn* /usr/lib/x86_64-linux-gnu/",
-#                 "chmod a+r /usr/lib/x86_64-linux-gnu/libcudnn*",
-#                 "ldconfig",  # Refresh shared library cache
-#             ]
-#         )
-#         .pip_install(
-#             "fastapi[standard]",
-#             "python-multipart",
-#             "huggingface-hub",
-#             "librosa",
-#             "soundfile",
-#             "numpy<2.0",
-#             "ctranslate2",
-#             "faster-whisper>=1.0.1",
-#         )
-#         .pip_install(
-#             # CORRECTED: PyTorch and Torchaudio versions now explicitly request +cu118
-#             # to match the CUDA 11.8 base image and the extra_index_url.
-#             "torch==2.3.0+cu118",
-#             "torchaudio==2.3.0+cu118",
-#             extra_index_url="https://download.pytorch.org/whl/cu118",
-#         )
-#     )
-
-
 volume = modal.Volume.from_name("whisper-models-v2", create_if_missing=True)
 
 
 @app.cls(
     image=get_modal_image(),
     gpu="T4",
-    memory=16384,
+    memory=2048,
     timeout=1200,
-    cpu=4.0,
+    cpu=1.0,
     volumes={"/tmp/whisper_cache": volume},
     scaledown_window=600,
     retries=modal.Retries(max_retries=2, backoff_coefficient=2.0, initial_delay=1.0),
@@ -327,35 +279,6 @@ class HebrewASR:
                 except Exception as e:
                     logger.warning(f"Failed to delete temp file: {e}")
 
-    @modal.method()
-    async def get_environment_info(self) -> Dict[str, Any]:
-        """Return environment diagnostics including Torch, CUDA, and cuDNN versions"""
-        try:
-            import torch
-
-            print(f"==>> torch: {torch.__version__}")
-            return {
-                "torch_version": torch.__version__,
-                "cuda_available": torch.cuda.is_available(),
-                "cuda_version": torch.version.cuda,
-                "cudnn_available": torch.backends.cudnn.is_available(),
-                "cudnn_version": (
-                    torch.backends.cudnn.version()
-                    if torch.backends.cudnn.is_available()
-                    else None
-                ),
-                "device_selected": self.device,
-                "compute_type": self.compute_type,
-                "model_loaded": self.model is not None,
-                "model_name": self.model_name,
-            }
-        except Exception as e:
-            logger.error(f"Failed to retrieve environment info: {str(e)}")
-            return {
-                "error": str(e),
-                "message": "Failed to retrieve environment info",
-            }
-
 
 # FastAPI Configuration
 def create_api():
@@ -388,50 +311,6 @@ def create_api():
 def web_api():
     """FastAPI web service for Hebrew ASR"""
     web_app = create_api()
-
-    @web_app.get("/")
-    async def root():
-        return {
-            "service": "Hebrew ASR API",
-            "status": "running",
-            "endpoints": {
-                "transcribe": "POST /transcribe",
-                "health": "GET /health",
-            },
-        }
-
-    @web_app.get("/health")
-    async def health_check():
-        try:
-            asr = HebrewASR()
-            info_future = asr.get_environment_info.remote()
-
-            print(f"==>> type(info_future): {type(info_future)}")
-
-            if hasattr(info_future, "__await__"):
-                info = await info_future
-            else:
-                logger.warning("Returned a non-awaitable object!")
-                info = info_future
-
-            return JSONResponse(
-                status_code=200,
-                content={
-                    "status": "healthy",
-                    "message": "Hebrew ASR service is running",
-                    "env_info": info,
-                },
-            )
-        except Exception as e:
-            logger.error(f"Health check failed: {str(e)}")
-            return JSONResponse(
-                status_code=500,
-                content={
-                    "status": "unhealthy",
-                    "error": str(e),
-                    "message": "Failed to retrieve environment info",
-                },
-            )
 
     @web_app.post("/transcribe")
     async def transcribe_endpoint(

@@ -15,17 +15,17 @@ const AudioTranscriber: React.FC = () => {
   const API_URL =
     "https://hebrewspeakingevaluation--hebrew-asr-service-web-api.modal.run";
 
-  useEffect(() => {
-    (async () => {
-      const response = await fetch(`${API_URL}/health`, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/octet-stream",
-        },
-      });
-      console.log("🚀 ~ page.tsx:26 ~ response:", response);
-    })();
-  }, []);
+  // useEffect(() => {
+  //   (async () => {
+  //     const response = await fetch(`${API_URL}/health`, {
+  //       method: "GET",
+  //       headers: {
+  //         "Content-Type": "application/octet-stream",
+  //       },
+  //     });
+  //     console.log("🚀 ~ page.tsx:26 ~ response:", response);
+  //   })();
+  // }, []);
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -83,68 +83,68 @@ const AudioTranscriber: React.FC = () => {
     }
   };
 
-  const handleSubmit = async () => {
-    const audioToSend = recordedAudioBlob || uploadedAudioFile;
-    if (!audioToSend) {
-      setError("No audio source selected or recorded.");
-      return;
-    }
+    const handleSubmit = async () => {
+      const audioToSend = recordedAudioBlob || uploadedAudioFile;
+      if (!audioToSend) {
+        setError("No audio source selected or recorded.");
+        return;
+      }
 
-    setIsLoading(true);
-    setError("");
-    setTranscript("");
+      setIsLoading(true);
+      setError("");
+      setTranscript("");
 
-    try {
-      // Create FormData and append the audio file
-      const formData = new FormData();
+      try {
+        // Create FormData and append the audio file
+        const formData = new FormData();
 
-      // If it's a recorded blob, create a File object
-      if (recordedAudioBlob) {
-        const audioFile = new File([recordedAudioBlob], "recorded-audio.webm", {
-          type: "audio/webm",
+        // If it's a recorded blob, create a File object
+        if (recordedAudioBlob) {
+          const audioFile = new File([recordedAudioBlob], "recorded-audio.webm", {
+            type: "audio/webm",
+          });
+          formData.append("audio_file", audioFile);
+        } else if (uploadedAudioFile) {
+          formData.append("audio_file", uploadedAudioFile);
+        }
+
+        // Append language parameter
+        formData.append("language", "he");
+
+        const response = await fetch(`${API_URL}/transcribe`, {
+          method: "POST",
+          body: formData, // Send as FormData
+          // Remove Content-Type header - browser will set it automatically with boundary
         });
-        formData.append("audio_file", audioFile);
-      } else if (uploadedAudioFile) {
-        formData.append("audio_file", uploadedAudioFile);
-      }
-
-      // Append language parameter
-      formData.append("language", "he");
-
-      const response = await fetch(`${API_URL}/transcribe`, {
-        method: "POST",
-        body: formData, // Send as FormData
-        // Remove Content-Type header - browser will set it automatically with boundary
-      });
-      console.log(
-        "🚀 ~ page.tsx:116 ~ handleSubmit ~ response:",
-        response,
-        !response.ok
-      );
-
-      if (!response?.ok) {
         console.log(
-          "🚀 ~ page.tsx:126 ~ handleSubmit ~ !response?.ok:",
-          !response?.ok
+          "🚀 ~ page.tsx:116 ~ handleSubmit ~ response:",
+          response,
+          !response.ok
         );
-        const errorData = await response.json();
-        throw new Error(`API Error: ${errorData.error || response.statusText}`);
-      }
 
-      const result = await response.json();
-      if (result && result?.transcript) {
-        setTranscript(result);
-      } else {
-        setError(`Transcription failed: ${result.error || "Unknown error"}`);
+        if (!response?.ok) {
+          console.log(
+            "🚀 ~ page.tsx:126 ~ handleSubmit ~ !response?.ok:",
+            !response?.ok
+          );
+          const errorData = await response.json();
+          throw new Error(`API Error: ${errorData.error || response.statusText}`);
+        }
+
+        const result = await response.json();
+        if (result && result?.transcript) {
+          setTranscript(result);
+        } else {
+          setError(`Transcription failed: ${result.error || "Unknown error"}`);
+        }
+        //eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } catch (err: any) {
+        console.error("Error during transcription:", err);
+        setError(`Failed to transcribe audio: ${err.message}`);
+      } finally {
+        setIsLoading(false);
       }
-      //eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
-      console.error("Error during transcription:", err);
-      setError(`Failed to transcribe audio: ${err.message}`);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    };
 
   return (
     <div
